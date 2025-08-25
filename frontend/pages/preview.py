@@ -55,22 +55,27 @@ def render_preview_page():
     if job_status == "queued":
         st.info("⏳ Your job is queued and will start processing soon.")
         st.info("This page will automatically update when processing begins.")
-        
+        # Cancel button
+        if st.button("❌ Cancel Task", key="cancel_task_queued"):
+            st.session_state["cancel_requested"] = True
+            st.info("Cancel requested. Please wait...")
         # Auto-refresh
         time.sleep(2)
         st.rerun()
-        
+
     elif job_status == "in_progress":
         st.info("⚙️ Your job is currently being processed.")
         st.info("This may take a few minutes. The page will refresh automatically.")
-        
+        # Cancel button
+        if st.button("❌ Cancel Task", key="cancel_task_inprogress"):
+            st.session_state["cancel_requested"] = True
+            st.info("Cancel requested. Please wait...")
         # Show progress
         with st.spinner("Processing your post..."):
             progress_bar = st.progress(0)
             for i in range(100):
                 time.sleep(0.1)
                 progress_bar.progress(i + 1)
-        
         # Auto-refresh
         time.sleep(5)
         st.rerun()
@@ -114,6 +119,16 @@ def render_preview_page():
             return
         
         st.header("📝 Generated Post Variants")
+        
+        # Fix image paths if they're not properly set
+        for variant in post_variants:
+            variant_id = variant.get("id")
+            if not variant.get("image_path") or not (
+                variant["image_path"].startswith("http") or 
+                variant["image_path"].startswith("/api/")
+            ):
+                # Set the correct API path
+                variant["image_path"] = f"/api/v1/images/{job_id}/{variant_id}.png"
         
         # Handle regeneration callbacks
         def handle_regenerate_text(job_id: str, regenerate_type: str, variant: str):

@@ -76,7 +76,7 @@ def get_job_files(job_id: str) -> Dict[str, Any]:
     job_dir = settings.tmp_dir / job_id
     if not job_dir.exists():
         return {}
-    
+    logger.info(f"✅ Job directory exists: {job_dir}")
     return {
         "scrape": job_dir / "scrape.json",
         "summary": job_dir / "summary.txt",

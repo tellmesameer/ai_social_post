@@ -183,36 +183,51 @@ async def run_job(job_id: str) -> None:
     logger.info(f"Running job pipeline for job_id: {job_id}")
     try:
         with Session(engine) as session:
-            # Get job record
             job = session.exec(select(Job).where(Job.job_id == job_id)).first()
             if not job:
                 logger.error(f"Job {job_id} not found")
                 return
-            
+            # Check for cancellation before starting
+            if job.status == "cancelled":
+                logger.info(f"Job {job_id} was cancelled before starting.")
+                return
             # Capture all required fields BEFORE the session closes to avoid detached instance access
             job_url = job.url
             job_opinion = job.opinion
             job_tone = job.tone
             job_image_options = job.get_image_options()
-            # Update status to in_progress
             job.status = "in_progress"
             session.commit()
-        
-        # Run pipeline steps
+
         logger.info(f"Starting job pipeline for {job_id}")
-        
+
         # Step 1: Scrape the URL
+        with Session(engine) as session:
+            job = session.exec(select(Job).where(Job.job_id == job_id)).first()
+            if job and job.status == "cancelled":
+                logger.info(f"Job {job_id} cancelled during scrape step.")
+                return
         scrape_data = await scrape_url(job_url)
         scrape_path = get_job_files(job_id)["scrape"]
         await save_json(scrape_data, scrape_path)
-        
+
         # Step 2: Generate summary using LangChain
+        with Session(engine) as session:
+            job = session.exec(select(Job).where(Job.job_id == job_id)).first()
+            if job and job.status == "cancelled":
+                logger.info(f"Job {job_id} cancelled during summary step.")
+                return
         summary_data = await generate_summary_with_langchain(scrape_data["main_text"])
         summary_path = get_job_files(job_id)["summary"]
         with open(summary_path, 'w', encoding='utf-8') as f:
             f.write(summary_data.get("summary", "Summary generation failed"))
-        
+
         # Step 3: Generate post variants using LangChain
+        with Session(engine) as session:
+            job = session.exec(select(Job).where(Job.job_id == job_id)).first()
+            if job and job.status == "cancelled":
+                logger.info(f"Job {job_id} cancelled during variants step.")
+                return
         variants = await generate_post_variants_with_langchain(
             summary_data.get("summary", ""),
             summary_data.get("bullets", []),
@@ -220,13 +235,23 @@ async def run_job(job_id: str) -> None:
             job_tone,
             job_id
         )
-        
+
         # Step 4: Generate images
+        with Session(engine) as session:
+            job = session.exec(select(Job).where(Job.job_id == job_id)).first()
+            if job and job.status == "cancelled":
+                logger.info(f"Job {job_id} cancelled during image generation step.")
+                return
         images = await generate_images_with_langchain(variants, job_image_options, job_id)
-        
+
         # Step 5: Moderate content
+        with Session(engine) as session:
+            job = session.exec(select(Job).where(Job.job_id == job_id)).first()
+            if job and job.status == "cancelled":
+                logger.info(f"Job {job_id} cancelled during moderation step.")
+                return
         moderation_results = await moderate_content(variants)
-        
+
         # Step 6: Save final result
         result = {
             "job_id": job_id,
@@ -242,73 +267,54 @@ async def run_job(job_id: str) -> None:
             },
             "moderation": moderation_results
         }
-        
+
         result_path = get_job_files(job_id)["result"]
         await save_json(result, result_path)
-        
+
         # Verify images exist for each variant; attempt one retry for missing images
         try:
             from pathlib import Path
             images_dir = Path(f"./tmp/{job_id}/images")
             missing = []
-            
             for v in result["post_variants"]:
-                # Use the actual file system path, not the API URL
                 img_path = images_dir / f"{v.get('id')}.png"
                 if not img_path.exists():
                     missing.append((v.get('id'), img_path))
-            
             if missing:
                 logger.warning(f"Missing images for job={job_id}: {missing}. Attempting one retry generation.")
-                
-                # Try to regenerate missing images once
                 for variant_id, img_path in missing:
                     try:
-                        # Find the variant record
                         variant = next((x for x in result["post_variants"] if x["id"] == variant_id), None)
                         if not variant:
                             continue
-                            
-                        # Generate image prompt
                         messages = create_image_prompt_messages(
                             variant['text'][:100],
                             job_image_options.get('style', 'photographic'),
                             job_image_options.get('negative_prompt', 'no text, no logos')
                         )
-                        
                         image_prompt = await provider.generate_text(
                             prompt=str(messages[-1].content),
                             max_tokens=200,
                             temperature=0.5
                         )
-                        
                         image_data = await provider.generate_image(
                             prompt=image_prompt,
                             negative_prompt=job_image_options.get('negative_prompt', 'no text, no logos'),
                             size=job_image_options.get('aspect_ratio', '16:9'),
                             job_id=job_id
                         )
-                        
-                        # Ensure directory exists
                         img_path.parent.mkdir(parents=True, exist_ok=True)
                         await save_image(image_data, img_path)
-                        
-                        # Update result path string with API URL
                         variant['image_path'] = f"/api/v1/images/{job_id}/{variant_id}.png"
                         logger.info(f"Regenerated missing image for job={job_id} variant={variant_id}")
                     except Exception as e:
                         logger.exception(f"Retry generation failed for job={job_id} variant={variant_id}: {e}")
-                
-                # Re-save result after attempts
                 await save_json(result, result_path)
-                
-                # Re-check missing
                 still_missing = []
                 for v in result["post_variants"]:
                     img_path = images_dir / f"{v.get('id')}.png"
                     if not img_path.exists():
                         still_missing.append((v.get('id'), img_path))
-                
                 if still_missing:
                     err_msg = f"Images missing after retry for job={job_id}: {still_missing}"
                     logger.error(err_msg)
@@ -321,22 +327,19 @@ async def run_job(job_id: str) -> None:
                     return
         except Exception:
             logger.exception("Error during image verification/generation step")
-        
-        # Update job status to completed
+
         with Session(engine) as session:
             job = session.exec(select(Job).where(Job.job_id == job_id)).first()
             if job:
                 job.status = "completed"
                 job.result_path = str(result_path)
                 session.commit()
-        
-        logger.info(f"Job {job_id} completed successfully")
-        
+        logger.info(f"✅ Job_id {job_id} completed successfully.")
+
     except Exception as e:
         logger.error(f"Job {job_id} failed: {e}")
-        # Update job status to failed
         with Session(engine) as session:
-            job = session.exec(select(Job).where(Job.job_id == job_id)).first())
+            job = session.exec(select(Job).where(Job.job_id == job_id)).first()
             if job:
                 job.status = "failed"
                 job.error = str(e)
@@ -531,6 +534,7 @@ async def generate_post_variants_with_langchain(summary: str, bullets: List[str]
         logger.exception("Post variant generation exception")
         return create_fallback_variants(summary, opinion, tone, job_id)
 
+
 async def generate_images_with_langchain(variants: List[Dict[str, Any]], image_options: Dict[str, Any], job_id: str) -> bool:
     """Generate images for post variants using LangChain prompts."""
     logger.info(f"Generating images for job_id: {job_id} with options: {image_options}")
@@ -591,18 +595,22 @@ async def generate_images_with_langchain(variants: List[Dict[str, Any]], image_o
             # Save image using storage helper path (Path object)
             try:
                 await save_image(image_data, target_path)
+                logger.info(f"Successfully saved image for job={job_id} variant={variant_id} to {target_path}")
             except Exception as e:
                 logger.exception(f"Failed to save image for job={job_id} variant={variant_id} to {target_path}: {e}")
                 return False
 
             # Update variant with correct image path (API URL for serialization)
-            variant['image_path'] = f"/api/v1/images/{job_id}/{variant_id}.png"
+            api_url = f"/api/v1/images/{job_id}/{variant_id}.png"
+            variant['image_path'] = api_url
+            logger.info(f"Set image_path for variant {variant_id} to {api_url}")
 
         return True
 
     except Exception as e:
         logger.error(f"Image generation failed: {e}")
         return False
+
 
 async def moderate_content(variants: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Moderate generated content using LangChain."""
@@ -719,31 +727,41 @@ async def regenerate_content(job_id: str, regenerate_type: str, variant: str) ->
         job_files = get_job_files(job_id)
         if not job_files:
             return False
-        
+
         # Read current result
         result = read_json(job_files["result"])
         if not result:
             return False
-        
+
         # Find the variant
         variant_data = None
         for v in result["post_variants"]:
             if v["id"] == variant:
                 variant_data = v
                 break
-        
+
         if not variant_data:
             return False
-        
+
+        # Check for cancellation before starting
+        with Session(engine) as session:
+            job = session.exec(select(Job).where(Job.job_id == job_id)).first()
+            if job and job.status == "cancelled":
+                logger.info(f"Job {job_id} cancelled before regeneration.")
+                return False
+
         if regenerate_type in ["text", "both"]:
             # Regenerate text
             summary = ""
             with open(job_files["summary"], 'r', encoding='utf-8') as f:
                 summary = f.read()
-            
+
             # Read job details for regeneration, capture fields, and generate
             with Session(engine) as session:
                 job = session.exec(select(Job).where(Job.job_id == job_id)).first()
+                if job and job.status == "cancelled":
+                    logger.info(f"Job {job_id} cancelled during text regeneration.")
+                    return False
                 if job:
                     job_opinion = job.opinion
                     job_tone = job.tone
@@ -763,20 +781,23 @@ async def regenerate_content(job_id: str, regenerate_type: str, variant: str) ->
                 if new_v["id"] == variant:
                     variant_data.update(new_v)
                     break
-        
+
         if regenerate_type in ["image", "both"]:
             # Regenerate image
             with Session(engine) as session:
                 job = session.exec(select(Job).where(Job.job_id == job_id)).first()
+                if job and job.status == "cancelled":
+                    logger.info(f"Job {job_id} cancelled during image regeneration.")
+                    return False
                 image_options = job.get_image_options() if job else {}
-            
+
             # Generate new image prompt
             messages = create_image_prompt_messages(
                 variant_data['text'][:100],
                 image_options.get('style', 'photographic'),
                 image_options.get('negative_prompt', 'no text, no logos')
             )
-            
+
             image_prompt = await provider.generate_text(
                 prompt=str(messages[-1].content),
                 max_tokens=200,
@@ -799,11 +820,11 @@ async def regenerate_content(job_id: str, regenerate_type: str, variant: str) ->
             await save_image(image_data, image_path)
             # Update variant with new image path (API URL)
             variant_data['image_path'] = f"/api/v1/images/{job_id}/{variant}.png"
-        
+
         # Save updated result
         await save_json(result, job_files["result"])
         return True
-        
+
     except Exception as e:
         logger.error(f"Regeneration failed for job {job_id}: {e}")
         return False

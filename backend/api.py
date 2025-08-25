@@ -1,3 +1,47 @@
+import os
+import asyncio
+from fastapi import HTTPException, BackgroundTasks, Depends, status
+from sqlmodel import Session, select
+from .models import (
+    CreatePostRequest,
+    CreatePostResponse,
+    RegenerateRequest,
+    PublishRequest,
+    PublishResponse,
+    JobStatusResponse,
+    Job, get_session
+)
+from .config import settings
+from .providers import provider
+from .services import create_job, run_job, regenerate_content, publish_to_linkedin
+from .storage import get_job_files
+from fastapi.responses import FileResponse
+from fastapi import APIRouter, Path
+from .logger_config import logger
+
+# Create API router
+app = APIRouter()
+
+# Add cancel endpoint to router (APIRouter)
+@app.post("/posts/{job_id}/cancel", status_code=status.HTTP_200_OK)
+async def cancel_post(job_id: str, session: Session = Depends(get_session)):
+    """Cancel a running or queued job."""
+    logger.info(f"Received cancel request for job_id={job_id}")
+    try:
+        job = session.exec(select(Job).where(Job.job_id == job_id)).first()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        if job.status not in ["queued", "in_progress"]:
+            raise HTTPException(status_code=400, detail="Job cannot be cancelled in its current state")
+        job.status = "cancelled"
+        session.commit()
+        logger.info(f"Job {job_id} cancelled successfully")
+        return {"job_id": job_id, "status": "cancelled"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to cancel job {job_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 # backend\api.py
 import os
 import asyncio
@@ -36,8 +80,11 @@ async def get_image(job_id: str = Path(...), variant: str = Path(...)):
     
     # Construct the correct file system path
     from pathlib import Path
-    image_path = Path(f"./tmp/{job_id}/images/{variant}.png")
+    # Use the current working directory as the base
+    base_dir = Path.cwd()
+    image_path = base_dir / "tmp" / job_id / "images" / f"{variant}.png"
     
+    # Check if the image exists
     if not image_path.exists():
         logger.error(f"Image not found at {image_path}")
         raise HTTPException(status_code=404, detail="Image not found")
@@ -135,7 +182,7 @@ async def get_post_status(job_id: str, session: Session = Depends(get_session)):
     except Exception as e:
         logger.error(f"Failed to get job status for {job_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
-    
+        
 
 
 @app.post("/posts/{job_id}/regenerate", response_model=CreatePostResponse)

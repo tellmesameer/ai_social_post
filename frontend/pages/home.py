@@ -1,4 +1,5 @@
 # frontend/pages/home.py
+import time
 import streamlit as st
 from components.post_form import render_post_form, render_form_preview
 from api_client import get_api_client
@@ -91,25 +92,43 @@ def render_home_page():
                         4. **Publish** - Share your favorite variant on LinkedIn
                         """)
                         
-                        # Navigation button
-                        if st.button("📊 Go to Preview Page", type="primary"):
-                            st.switch_page("pages/preview.py")
-                        
                         # Show job status
                         st.subheader("📊 Job Status")
                         status_response = api_client.get_post_status(job_id)
-                        
+                        images_ready = False
                         if status_response:
                             status = status_response.get("status", "unknown")
                             st.info(f"**Current Status:** {status}")
-                            
+                            # In the section where job status is checked after job creation
                             if status == "completed":
-                                st.success("🎉 Your posts are ready! Click 'Go to Preview Page' to view them.")
+                                # Check if both variants have image_path
+                                result = status_response.get("result", {})
+                                post_variants = result.get("post_variants", [])
+                                
+                                # Log the image paths for debugging
+                                st.write("**Debug Info:** Image paths in variants:")
+                                for v in post_variants:
+                                    st.write(f"Variant {v.get('id')}: {v.get('image_path')}")
+                                
+                                # Check if images are ready - be more lenient with the check
+                                # We just need to know we have variants, the image paths will be fixed in the preview
+                                images_ready = len(post_variants) > 0  # We have at least one variant
+                                
+                                if images_ready:
+                                    st.success("🎉 Your posts are ready! Click 'Go to Preview Page' to view them.")
+                                else:
+                                    st.info("Images are still being generated. Please wait...")
+                                    time.sleep(1)
+                                    st.rerun()
                             elif status == "failed":
                                 error = status_response.get("error", "Unknown error")
                                 st.error(f"❌ Job failed: {error}")
                             else:
                                 st.info("⏳ Job is still processing. This may take a few minutes.")
+                                time.sleep(1)
+                                st.rerun()
+                        # Navigation button (enabled only if images are ready)
+                        st.button("📊 Go to Preview Page", type="primary", disabled=not images_ready, on_click=lambda: st.switch_page("pages/preview.py"))
                         
                     else:
                         st.error("❌ Failed to create job. Please try again.")

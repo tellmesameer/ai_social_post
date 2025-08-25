@@ -1,23 +1,40 @@
 # frontend/logger.py
-import asyncio
 import logging
 import sys
 import functools
-from typing import Callable, Any
+import asyncio
+from typing import Optional, Callable, Any
 
+def setup_logging(level: str = "INFO", log_format: Optional[str] = None) -> logging.Logger:
+    """Setup logging configuration for the application and return the app logger."""
+    if log_format is None:
+        log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
+    # Configure root logger handlers (only once)
+    root = logging.getLogger()
+    if not root.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        formatter = logging.Formatter(log_format)
+        handler.setFormatter(formatter)
+        root.setLevel(getattr(logging, level.upper(), logging.INFO))
+        root.addHandler(handler)
 
-def setup_logging() -> logging.Logger:
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s - frontend - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
-    )
-    return logging.getLogger("frontend")
+    # Create/get application logger
+    logger = logging.getLogger("ai_social_post")
+    # Keep application-level logs at INFO by default to avoid very noisy ENTER/EXIT debug spam
+    logger.setLevel(logging.INFO)
 
+    # Reduce verbosity for noisy third-party libraries
+    logging.getLogger('sqlalchemy').setLevel(logging.WARNING)
+    logging.getLogger('langchain').setLevel(logging.WARNING)
+    logging.getLogger('google').setLevel(logging.WARNING)
+    return logger
 
 def log_call(logger: logging.Logger) -> Callable[..., Callable[..., Any]]:
-    """Decorator to log function entry/exit with module and function name."""
+    """Decorator factory that logs entry/exit and exceptions for sync and async functions.
+
+    Usage: 
+    """
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         if asyncio.iscoroutinefunction(func):
             @functools.wraps(func)
@@ -45,6 +62,5 @@ def log_call(logger: logging.Logger) -> Callable[..., Callable[..., Any]]:
             return sync_wrapper
     return decorator
 
-# Create default logger
+# Module-level logger instance
 logger = setup_logging()
-

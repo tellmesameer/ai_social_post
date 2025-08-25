@@ -2,6 +2,9 @@
 import streamlit as st
 from typing import Dict, Any, Optional
 from PIL import Image
+from frontend.logger import logger
+
+BASE_API_URL = "http://127.0.0.1:8000"  # Update if backend runs elsewhere
 
 
 def render_preview_card(
@@ -48,6 +51,8 @@ def render_preview_card(
         alt_text = variant.get("alt_text", "")
         st.caption(alt_text if alt_text else "No alt text provided")
     
+    # In the render_preview_card function
+    # In the render_preview_card function
     with col2:
         # Image display
         st.write("**Generated Image:**")
@@ -55,34 +60,40 @@ def render_preview_card(
         # Get image path from variant
         image_path = variant.get("image_path")
         
-        # If image_path is a URL (starts with /api/ or http), use it directly
-        if isinstance(image_path, str) and (image_path.startswith("/api/") or image_path.startswith("http")):
-            st.image(image_path, caption="Generated Image", use_column_width=True)
-        # If image_path is a file path, convert to API URL
-        elif isinstance(image_path, str) and not image_path.startswith("/api/"):
-            # Convert file path to API URL
-            api_url = f"/api/v1/images/{job_id}/{variant_id}.png"
-            st.image(api_url, caption="Generated Image", use_column_width=True)
-        # If image_data is bytes, display directly
-        elif isinstance(image_path, bytes):
-            st.image(image_path, caption="Generated Image", use_column_width=True)
-        # If image_path is a file path as a Path object
-        elif hasattr(image_path, 'exists') and callable(image_path.exists):
-            if image_path.exists():
-                try:
-                    with open(image_path, "rb") as f:
-                        img_bytes = f.read()
-                    st.image(img_bytes, caption="Generated Image", use_column_width=True)
-                except Exception as e:
-                    st.error(f"Unable to load image from path: {e}")
-            else:
-                # Try API URL as fallback
-                api_url = f"/api/v1/images/{job_id}/{variant_id}.png"
-                st.image(api_url, caption="Generated Image", use_column_width=True)
+        # Construct the API URL for the image
+        if image_path and (image_path.startswith("http://") or image_path.startswith("https://")):
+            api_url = image_path
+        elif image_path and image_path.startswith("/api/"):
+            # Convert relative API path to full URL
+            api_url = f"{BASE_API_URL}{image_path}"
         else:
-            # Try API URL as fallback
-            api_url = f"/api/v1/images/{job_id}/{variant_id}.png"
+            # Fallback to constructing the URL manually
+            api_url = f"{BASE_API_URL}/api/v1/images/{job_id}/{variant_id}.png"
+        
+        # Display the image using the API URL
+        try:
             st.image(api_url, caption="Generated Image", use_column_width=True)
+            logger.info(f"Successfully loaded image for variant {variant_id} from {api_url}")
+        except Exception as e:
+            st.error(f"Unable to load image: {e}")
+            st.info("Image will be displayed when available")
+            logger.error(f"Failed to load image for variant {variant_id}: {e}")
+            
+            # Use a placeholder image
+            placeholder_img = create_placeholder_image(variant_id)
+            st.image(placeholder_img, caption="Image will be generated", use_column_width=True)
+
+
+            st.info("Image will be displayed when available")
+            logger.info(f"ℹ️ Using placeholder image for variant {variant_id}")
+            return variant
+        else:
+            try:
+                st.image(api_url, caption="Generated Image", use_column_width=True)
+            except Exception as e:
+                st.error(f"Unable to load image: {e}")
+                st.info("Image will be displayed when available")
+                logger.error(f"Failed to load image for variant {variant_id}: {e}")
     
     # Action buttons
     st.write("**Actions:**")
@@ -114,7 +125,6 @@ def render_preview_card(
     variant["text"] = edited_text
     
     return variant
-
 
 
 def create_placeholder_image(variant_id: str) -> Image.Image:
