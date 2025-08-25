@@ -5,7 +5,7 @@ from PIL import Image
 from frontend.logger import logger
 
 BASE_API_URL = "http://127.0.0.1:8000"  # Update if backend runs elsewhere
-
+LOG_PREFIX = "[preview_card.py]"
 
 def render_preview_card(
     variant: Dict[str, Any], 
@@ -52,14 +52,17 @@ def render_preview_card(
         st.caption(alt_text if alt_text else "No alt text provided")
     
     # In the render_preview_card function
-    # In the render_preview_card function
     with col2:
         # Image display
         st.write("**Generated Image:**")
-        
-        # Get image path from variant
-        image_path = variant.get("image_path")
-        
+        # Ensure the image path is a full URL
+        image_path = variant.get("image_path", "")
+        if not image_path.startswith("http"):
+            # Prepend the base API URL if it's not already a full URL
+            image_path = f"{BASE_API_URL}{image_path}"
+        st.write(f"Loading image from: {image_path}")  # This will show the URL in the app
+        # Now use the full URL
+        st.image(image_path, caption="Generated Image")
         # Construct the API URL for the image
         if image_path and (image_path.startswith("http://") or image_path.startswith("https://")):
             api_url = image_path
@@ -73,7 +76,7 @@ def render_preview_card(
         # Display the image using the API URL
         try:
             st.image(api_url, caption="Generated Image", use_column_width=True)
-            logger.info(f"Successfully loaded image for variant {variant_id} from {api_url}")
+            logger.info(f"{LOG_PREFIX} render_preview_card: Variant {variant_id} image_path: {image_path} (type: {type(image_path)})")
         except Exception as e:
             st.error(f"Unable to load image: {e}")
             st.info("Image will be displayed when available")
@@ -123,6 +126,9 @@ def render_preview_card(
     
     # Update variant data with edited text
     variant["text"] = edited_text
+    
+    logger.info(f"{LOG_PREFIX} render_preview_card: Rendering action buttons for variant {variant_id}, image_ready={image_ready}")
+    logger.info(f"{LOG_PREFIX} render_preview_card: User edited text for variant {variant_id}: {edited_text[:50]}...")
     
     return variant
 

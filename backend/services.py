@@ -20,9 +20,11 @@ from datetime import datetime
 import re
 import ast
 
+LOG_PREFIX = "[services.py]"
+
 def _coerce_response_to_str(resp) -> str:
     """Coerce various response shapes (str, list, dict, objects) to a single string."""
-    logger.info("Coercing response to string")
+    logger.info(f"{LOG_PREFIX} _coerce_response_to_str: Coercing response to string")
     if isinstance(resp, str):
         return resp
     if isinstance(resp, list):
@@ -51,7 +53,7 @@ def _coerce_response_to_str(resp) -> str:
 
 
 def _extract_json_from_text(text: str):
-    logger.info("Extracting JSON from text")
+    logger.info(f"{LOG_PREFIX} _extract_json_from_text: Extracting JSON from text")
     """Attempt to extract a JSON object/array from text and parse it.
     Tries heuristics: remove code fences, find {...} or [...], ast.literal_eval, and single-quote -> double-quote fallback.
     """
@@ -88,7 +90,7 @@ def _extract_json_from_text(text: str):
 
 async def create_job(url: str, opinion: str, tone: str, image_options: Dict[str, Any]) -> str:
     """Create a new job and return job_id."""
-    logger.info("Creating new job")
+    logger.info(f"{LOG_PREFIX} create_job: Creating new job")
     # Validate URL
     if not is_valid_url(url):
         raise ValueError("Invalid URL provided")
@@ -133,12 +135,12 @@ async def create_job(url: str, opinion: str, tone: str, image_options: Dict[str,
             raise ValueError(msg)
     except ImportError:
         # httpx not available — fall back to syntactic validation but warn
-        logger.warning("httpx not available; skipping reachability check")
+        logger.warning(f"{LOG_PREFIX} create_job: httpx not available; skipping reachability check")
     except ValueError:
         # re-raise ValueError
         raise
     except Exception as e:
-        logger.warning(f"Unexpected error during reachability check: {e}")
+        logger.warning(f"{LOG_PREFIX} create_job: Unexpected error during reachability check: {e}")
 
     # Generate unique job ID
     job_id = str(uuid.uuid4())
@@ -175,12 +177,12 @@ async def create_job(url: str, opinion: str, tone: str, image_options: Dict[str,
         session.commit()
         session.refresh(job)
 
-    logger.info(f"Created job {job_id} for URL: {url}")
+    logger.info(f"{LOG_PREFIX} create_job: Created job {job_id} for URL: {url}")
     return job_id
 
 async def run_job(job_id: str) -> None:
     """Run the complete job pipeline."""
-    logger.info(f"Running job pipeline for job_id: {job_id}")
+    logger.info(f"{LOG_PREFIX} run_job: Running job pipeline for job_id: {job_id}")
     try:
         with Session(engine) as session:
             job = session.exec(select(Job).where(Job.job_id == job_id)).first()
@@ -189,7 +191,7 @@ async def run_job(job_id: str) -> None:
                 return
             # Check for cancellation before starting
             if job.status == "cancelled":
-                logger.info(f"Job {job_id} was cancelled before starting.")
+                logger.info(f"{LOG_PREFIX} run_job: Job {job_id} was cancelled before starting.")
                 return
             # Capture all required fields BEFORE the session closes to avoid detached instance access
             job_url = job.url
@@ -199,13 +201,13 @@ async def run_job(job_id: str) -> None:
             job.status = "in_progress"
             session.commit()
 
-        logger.info(f"Starting job pipeline for {job_id}")
+        logger.info(f"{LOG_PREFIX} run_job: Starting job pipeline for {job_id}")
 
         # Step 1: Scrape the URL
         with Session(engine) as session:
             job = session.exec(select(Job).where(Job.job_id == job_id)).first()
             if job and job.status == "cancelled":
-                logger.info(f"Job {job_id} cancelled during scrape step.")
+                logger.info(f"{LOG_PREFIX} run_job: Job {job_id} cancelled during scrape step.")
                 return
         scrape_data = await scrape_url(job_url)
         scrape_path = get_job_files(job_id)["scrape"]
@@ -215,7 +217,7 @@ async def run_job(job_id: str) -> None:
         with Session(engine) as session:
             job = session.exec(select(Job).where(Job.job_id == job_id)).first()
             if job and job.status == "cancelled":
-                logger.info(f"Job {job_id} cancelled during summary step.")
+                logger.info(f"{LOG_PREFIX} run_job: Job {job_id} cancelled during summary step.")
                 return
         summary_data = await generate_summary_with_langchain(scrape_data["main_text"])
         summary_path = get_job_files(job_id)["summary"]
@@ -226,7 +228,7 @@ async def run_job(job_id: str) -> None:
         with Session(engine) as session:
             job = session.exec(select(Job).where(Job.job_id == job_id)).first()
             if job and job.status == "cancelled":
-                logger.info(f"Job {job_id} cancelled during variants step.")
+                logger.info(f"{LOG_PREFIX} run_job: Job {job_id} cancelled during variants step.")
                 return
         variants = await generate_post_variants_with_langchain(
             summary_data.get("summary", ""),
@@ -240,7 +242,7 @@ async def run_job(job_id: str) -> None:
         with Session(engine) as session:
             job = session.exec(select(Job).where(Job.job_id == job_id)).first()
             if job and job.status == "cancelled":
-                logger.info(f"Job {job_id} cancelled during image generation step.")
+                logger.info(f"{LOG_PREFIX} run_job: Job {job_id} cancelled during image generation step.")
                 return
         images = await generate_images_with_langchain(variants, job_image_options, job_id)
 
@@ -248,7 +250,7 @@ async def run_job(job_id: str) -> None:
         with Session(engine) as session:
             job = session.exec(select(Job).where(Job.job_id == job_id)).first()
             if job and job.status == "cancelled":
-                logger.info(f"Job {job_id} cancelled during moderation step.")
+                logger.info(f"{LOG_PREFIX} run_job: Job {job_id} cancelled during moderation step.")
                 return
         moderation_results = await moderate_content(variants)
 
@@ -306,7 +308,7 @@ async def run_job(job_id: str) -> None:
                         img_path.parent.mkdir(parents=True, exist_ok=True)
                         await save_image(image_data, img_path)
                         variant['image_path'] = f"/api/v1/images/{job_id}/{variant_id}.png"
-                        logger.info(f"Regenerated missing image for job={job_id} variant={variant_id}")
+                        logger.info(f"{LOG_PREFIX} run_job: Regenerated missing image for job={job_id} variant={variant_id}")
                     except Exception as e:
                         logger.exception(f"Retry generation failed for job={job_id} variant={variant_id}: {e}")
                 await save_json(result, result_path)
@@ -334,7 +336,7 @@ async def run_job(job_id: str) -> None:
                 job.status = "completed"
                 job.result_path = str(result_path)
                 session.commit()
-        logger.info(f"✅ Job_id {job_id} completed successfully.")
+        logger.info(f"{LOG_PREFIX} run_job: Job {job_id} completed successfully")
 
     except Exception as e:
         logger.error(f"Job {job_id} failed: {e}")
@@ -347,7 +349,7 @@ async def run_job(job_id: str) -> None:
 
 async def scrape_url(url: str) -> Dict[str, Any]:
     """Scrape content from URL."""
-    logger.info(f"Scraping URL: {url}")
+    logger.info(f"{LOG_PREFIX} scrape_url: Scraping URL: {url}")
     try:
         import requests
         from bs4 import BeautifulSoup
@@ -411,7 +413,7 @@ async def scrape_url(url: str) -> Dict[str, Any]:
 
 async def generate_summary_with_langchain(main_text: str) -> Dict[str, Any]:
     """Generate a summary using LangChain prompts."""
-    logger.info("Generating summary with LangChain")
+    logger.info(f"{LOG_PREFIX} generate_summary_with_langchain: Generating summary with LangChain")
     try:
         # Create messages using LangChain
         messages = create_summary_messages(main_text[:2000])  # Limit text length
@@ -451,7 +453,7 @@ async def generate_summary_with_langchain(main_text: str) -> Dict[str, Any]:
 
 async def generate_post_variants_with_langchain(summary: str, bullets: List[str], opinion: str, tone: str, job_id: str) -> List[Dict[str, Any]]:
     """Generate two post variants using LangChain prompts."""
-    logger.info("Generating post variants with LangChain")
+    logger.info(f"{LOG_PREFIX} generate_post_variants_with_langchain: Generating post variants with LangChain")
     response_text = None
     try:
         # Create messages using LangChain
@@ -469,7 +471,7 @@ async def generate_post_variants_with_langchain(summary: str, bullets: List[str]
         # If provider returned empty text, persist raw response for debugging and fallback
         if not response_text:
             try:
-                logger.warning(f"Variants provider returned empty response for job={job_id}. Persisting raw response for debugging.")
+                logger.warning(f"{LOG_PREFIX} generate_post_variants_with_langchain: Variants provider returned empty response for job={job_id}. Persisting raw response for debugging.")
                 # Persist raw response representation to tmp debug folder
                 if job_id:
                     from pathlib import Path
@@ -537,7 +539,7 @@ async def generate_post_variants_with_langchain(summary: str, bullets: List[str]
 
 async def generate_images_with_langchain(variants: List[Dict[str, Any]], image_options: Dict[str, Any], job_id: str) -> bool:
     """Generate images for post variants using LangChain prompts."""
-    logger.info(f"Generating images for job_id: {job_id} with options: {image_options}")
+    logger.info(f"{LOG_PREFIX} generate_images_with_langchain: Generating images for job_id: {job_id} with options: {image_options}")
     try:
         job_files = get_job_files(job_id)
         images_paths = job_files.get("images", {}) if job_files else {}
@@ -587,7 +589,7 @@ async def generate_images_with_langchain(variants: List[Dict[str, Any]], image_o
                         size=image_options.get('aspect_ratio', '16:9'),
                         job_id=job_id
                     )
-                    logger.info(f"Using provider fallback image for job={job_id} variant={variant_id}")
+                    logger.info(f"{LOG_PREFIX} generate_images_with_langchain: Using provider fallback image for job={job_id} variant={variant_id}")
                 except Exception:
                     logger.exception("Failed to generate fallback image")
                     raise
@@ -614,7 +616,7 @@ async def generate_images_with_langchain(variants: List[Dict[str, Any]], image_o
 
 async def moderate_content(variants: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Moderate generated content using LangChain."""
-    logger.info("Starting content moderation")
+    logger.info(f"{LOG_PREFIX} moderate_content: Starting content moderation")
     try:
         moderation_results = []
         
@@ -675,7 +677,7 @@ async def moderate_content(variants: List[Dict[str, Any]]) -> Dict[str, Any]:
         elif any(r["status"] == "review" for r in moderation_results):
             overall_status = "review"
         
-        logger.info(f"Moderation completed with overall status: {overall_status}")
+        logger.info(f"{LOG_PREFIX} moderate_content: Moderation completed with overall status: {overall_status}")
         return {
             "status": overall_status,
             "variants": moderation_results,
@@ -694,7 +696,7 @@ async def moderate_content(variants: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 def create_fallback_variants(summary: str, opinion: str, tone: str, job_id: str) -> List[Dict[str, Any]]:
     """Create fallback variants when AI generation fails."""
-    logger.info("Creating fallback post variants")
+    logger.info(f"{LOG_PREFIX} create_fallback_variants: Creating fallback post variants")
     base_text = f"Interesting article about {summary[:100]}... {opinion} #AI #Tech #Innovation"
     
     return [
@@ -721,7 +723,7 @@ def create_fallback_variants(summary: str, opinion: str, tone: str, job_id: str)
 
 async def regenerate_content(job_id: str, regenerate_type: str, variant: str) -> bool:
     """Regenerate specific content for a variant."""
-    logger.info(f"Regenerating content for job_id: {job_id}, type: {regenerate_type}, variant: {variant}")
+    logger.info(f"{LOG_PREFIX} regenerate_content: Regenerating content for job_id: {job_id}, type: {regenerate_type}, variant: {variant}")
     try:
         # Get job files
         job_files = get_job_files(job_id)
@@ -832,14 +834,14 @@ async def regenerate_content(job_id: str, regenerate_type: str, variant: str) ->
 
 def publish_to_linkedin(job_id: str, variant: str, user_id: str) -> Dict[str, Any]:
     """Publish variant to LinkedIn (stubbed for development)."""
-    logger.info(f"Publishing job_id: {job_id}, variant: {variant}, user_id: {user_id} to LinkedIn (simulated)")
+    logger.info(f"{LOG_PREFIX} publish_to_linkedin: Publishing job_id: {job_id}, variant: {variant}, user_id: {user_id} to LinkedIn (simulated)")
     try:
         # In production, this would integrate with LinkedIn API
         # For now, return simulated success
         
         linkedin_post_id = f"linkedin_{job_id}_{variant}_{user_id}"
         
-        logger.info(f"Simulated LinkedIn publish: {linkedin_post_id}")
+        logger.info(f"{LOG_PREFIX} publish_to_linkedin: Simulated LinkedIn publish: {linkedin_post_id}")
         
         return {
             "job_id": job_id,

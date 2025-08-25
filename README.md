@@ -11,6 +11,9 @@ Transform any article into engaging LinkedIn posts with AI-generated images usin
 - **✅ Content Moderation** - Safety checks before publishing
 - **📤 LinkedIn Ready** - Optimized posts for professional networking
 - **🔄 A/B Testing** - Compare two post variants for better engagement
+- **⚡ Async Job Pipeline** - Fully async backend for fast, scalable processing
+- **⏳ Auto-Refresh & Polling** - Frontend auto-refreshes until images are ready
+- **🛑 Cancel Jobs** - Cancel in-progress jobs from the UI
 
 ## 🏗️ Architecture
 
@@ -18,8 +21,8 @@ Transform any article into engaging LinkedIn posts with AI-generated images usin
 ai-social-post-generator/
 ├── backend/                 # FastAPI backend
 │   ├── main.py            # FastAPI app entry point
-│   ├── api.py             # REST API endpoints
-│   ├── services.py        # Business logic & job pipeline
+│   ├── api.py             # REST API endpoints (now includes /cancel)
+│   ├── services.py        # Async job pipeline, status, and cancellation
 │   ├── providers.py       # AI provider abstraction (Vertex/OpenAI)
 │   ├── prompts.py         # LangChain prompt templates
 │   ├── models.py          # Database models (SQLModel)
@@ -27,8 +30,8 @@ ai-social-post-generator/
 │   └── config.py          # Configuration & settings
 ├── frontend/               # Streamlit frontend
 │   ├── streamlit_app.py   # Main app with navigation
-│   ├── pages/             # Page components
-│   └── components/        # Reusable UI components
+│   ├── pages/             # Page components (auto-refresh, preview, cancel)
+│   └── components/        # Reusable UI components (image preview, cards)
 ├── scripts/                # Utility scripts
 └── tmp/                    # Temporary job files
 ```
@@ -112,12 +115,25 @@ streamlit run streamlit_app.py --server.port 8501
 
 ### Project Structure
 
-- **Backend**: FastAPI with SQLModel, LangChain integration
-- **Frontend**: Streamlit with modular components
+- **Backend**: FastAPI with SQLModel, LangChain integration, async job pipeline, cancel endpoint
+- **Frontend**: Streamlit with modular components, auto-refresh, cancel, and image polling
 - **Database**: SQLite (development) / PostgreSQL (production)
 - **AI Providers**: Vertex AI (primary), OpenAI (fallback)
 
 ### Key Components
+
+#### Async Job Pipeline & Cancellation
+
+- All backend job steps (scraping, summary, variants, images, moderation) are async
+- Job status: `queued`, `in_progress`, `completed`, `failed`, `cancelled`
+- Cancel endpoint: `POST /api/v1/posts/{job_id}/cancel` (UI button in preview page)
+- Pipeline checks for cancellation at every step
+
+#### Frontend Auto-Refresh & Image Polling
+
+- Home page auto-polls job status and enables preview only when images are ready
+- Preview page disables actions until images are generated
+- Cancel button available during processing
 
 #### LangChain Integration
 
@@ -195,6 +211,9 @@ curl -X POST "http://localhost:8000/api/v1/posts" \
       "aspect_ratio": "16:9"
     }
   }'
+
+# Cancel a job
+curl -X POST "http://localhost:8000/api/v1/posts/<job_id>/cancel"
 ```
 
 ## 📊 Monitoring & Maintenance

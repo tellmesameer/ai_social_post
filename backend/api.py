@@ -1,30 +1,34 @@
+# backend\api.py
 import os
 import asyncio
-from fastapi import HTTPException, BackgroundTasks, Depends, status
-from sqlmodel import Session, select
-from .models import (
-    CreatePostRequest,
-    CreatePostResponse,
-    RegenerateRequest,
-    PublishRequest,
-    PublishResponse,
-    JobStatusResponse,
-    Job, get_session
-)
-from .config import settings
-from .providers import provider
-from .services import create_job, run_job, regenerate_content, publish_to_linkedin
-from .storage import get_job_files
+from pathlib import Path
+
+# Create API router
+from fastapi import (APIRouter, BackgroundTasks, Depends, HTTPException, Path,
+                     status)
 from fastapi.responses import FileResponse
-from fastapi import APIRouter, Path
+from sqlmodel import Session, select
+
+from .config import settings
 from .logger_config import logger
+from .models import (CreatePostRequest, CreatePostResponse, Job,
+                     JobStatusResponse, PublishRequest, PublishResponse,
+                     RegenerateRequest, get_session)
+from .providers import provider
+from .services import (create_job, publish_to_linkedin, regenerate_content,
+                       run_job)
+from .storage import get_job_files
 
 # Create API router
 app = APIRouter()
 
+# Add a helper for consistent log prefix
+LOG_PREFIX = "[api.py]"
+
 # Add cancel endpoint to router (APIRouter)
 @app.post("/posts/{job_id}/cancel", status_code=status.HTTP_200_OK)
 async def cancel_post(job_id: str, session: Session = Depends(get_session)):
+    logger.info(f"{LOG_PREFIX} cancel_post: Received cancel request for job_id={job_id}")
     """Cancel a running or queued job."""
     logger.info(f"Received cancel request for job_id={job_id}")
     try:
@@ -35,63 +39,49 @@ async def cancel_post(job_id: str, session: Session = Depends(get_session)):
             raise HTTPException(status_code=400, detail="Job cannot be cancelled in its current state")
         job.status = "cancelled"
         session.commit()
-        logger.info(f"Job {job_id} cancelled successfully")
+        logger.info(f"{LOG_PREFIX} cancel_post: Job {job_id} cancelled successfully")
         return {"job_id": job_id, "status": "cancelled"}
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Failed to cancel job {job_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
-# backend\api.py
-import os
-import asyncio
-from fastapi import HTTPException, BackgroundTasks, Depends
-from sqlmodel import Session, select
-from .models import (
-    CreatePostRequest,
-    CreatePostResponse,
-    RegenerateRequest,
-    PublishRequest,
-    PublishResponse,
-    JobStatusResponse,
-)
-from .config import settings
-from .providers import provider
 
-from .models import Job, get_session
-from .services import create_job, run_job, regenerate_content, publish_to_linkedin
-
-from .storage import get_job_files
-from fastapi.responses import FileResponse
-from fastapi import APIRouter, Path
-from .logger_config import logger
-
-
-# Create API router
-from fastapi import APIRouter
-
-app = APIRouter()
 
 # Serve image files by job_id and variant (A/B)
-@app.get("/images/{job_id}/{variant}.png")
-async def get_image(job_id: str = Path(...), variant: str = Path(...)):
+@app.get("/api/v1/images/{job_id}/{variant}.png") # Ensure the full path is defined in the decorator
+async def serve_image(job_id: str = Path(...), variant: str = Path(...)):
+    logger.info(f"{LOG_PREFIX} serve_image: called for job_id={job_id}, variant={variant}")
     """Serve generated image files by job_id and variant (A/B)."""
-    logger.info(f"Fetching image for job_id={job_id}, variant={variant}")
+    logger.info(f"serve_image called for job_id={job_id}, variant={variant}")
+    logger.info(f"{LOG_PREFIX} serve_image: Configured settings.base_dir: {settings.base_dir}")
     
-    # Construct the correct file system path
-    from pathlib import Path
-    # Use the current working directory as the base
-    base_dir = Path.cwd()
-    image_path = base_dir / "tmp" / job_id / "images" / f"{variant}.png"
-    
-    # Check if the image exists
-    if not image_path.exists():
-        logger.error(f"Image not found at {image_path}")
-        raise HTTPException(status_code=404, detail="Image not found")
-    
-    logger.info(f"Serving image from {image_path}")
-    return FileResponse(str(image_path), media_type="image/png")
+    try:
+        # Construct the full path to the image file
+        image_path = settings.base_dir / "tmp" / job_id / "images" / f"{variant}.png"
+        logger.info(f"{LOG_PREFIX} serve_image: Constructed full image_path: {image_path}")
+        
+        # Check if the file actually exists
+        if not image_path.exists():
+            logger.error(f"Image file not found on disk at: {image_path}")
+            raise HTTPException(status_code=404, detail=f"Image not found at {image_path}")
+        
+        # Check if it's actually a file (not a directory)
+        if not image_path.is_file():
+            logger.error(f"Path exists but is not a file: {image_path}")
+            raise HTTPException(status_code=500, detail=f"Path is not a file: {image_path}")
 
+        logger.info(f"{LOG_PREFIX} serve_image: Serving image from: {image_path}")
+        # Return the file response
+        return FileResponse(path=str(image_path), media_type="image/png", filename=f"{variant}.png")
+        
+    except HTTPException:
+        # Re-raise HTTPExceptions (like 404)
+        raise
+    except Exception as e:
+        # Catch any other unexpected errors during path handling or FileResponse creation
+        logger.exception(f"Unexpected error serving image for job_id={job_id}, variant={variant}: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error while serving image: {str(e)}")
 
 
 @app.post("/posts", response_model=CreatePostResponse)
@@ -100,6 +90,7 @@ async def create_post(
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_session)
 ):
+    logger.info(f"{LOG_PREFIX} create_post: Received create_post request: {request}")
     """Create a new post generation job."""
     logger.info(f"Received create_post request: {request}")
     try:
@@ -113,7 +104,7 @@ async def create_post(
         
         # Schedule the job to run in background (async)
         asyncio.create_task(run_job(job_id))
-        logger.info(f"Created post job {job_id}")
+        logger.info(f"{LOG_PREFIX} create_post: Created post job {job_id}")
         return CreatePostResponse(
             job_id=job_id,
             status="queued"
@@ -126,9 +117,9 @@ async def create_post(
         raise HTTPException(status_code=500, detail="Internal server error")
 
         
-
 @app.get("/posts/{job_id}", response_model=JobStatusResponse)
 async def get_post_status(job_id: str, session: Session = Depends(get_session)):
+    logger.info(f"{LOG_PREFIX} get_post_status: Fetching status for job_id={job_id}")
     """Get the status and result of a post generation job."""
     logger.info(f"Fetching status for job_id={job_id}")
     try:
@@ -159,16 +150,16 @@ async def get_post_status(job_id: str, session: Session = Depends(get_session)):
                     
                     if not result:
                         result_error = "Result file is empty"
-                        logger.error(f"Result file is empty for job {job_id}")
+                        logger.error(f"{LOG_PREFIX} get_post_status: Result file is empty for job {job_id}")
                 except Exception as e:
-                    logger.error(f"Failed to read result file for job {job_id}: {e}")
+                    logger.error(f"{LOG_PREFIX} get_post_status: Failed to read result file for job {job_id}: {e}")
                     result_error = f"Failed to read result file: {e}"
             else:
                 result_error = "Job files not found"
-                logger.error(f"Job files not found for job {job_id}")
+                logger.error(f"{LOG_PREFIX} get_post_status: Job files not found for job {job_id}")
         else:
             result_error = "Job not completed"
-            logger.error(f"Job {job_id} is not completed yet")
+            logger.error(f"{LOG_PREFIX} get_post_status: Job {job_id} is not completed yet")
         
         response = JobStatusResponse(
             job_id=job_id,
@@ -184,7 +175,6 @@ async def get_post_status(job_id: str, session: Session = Depends(get_session)):
         raise HTTPException(status_code=500, detail="Internal server error")
         
 
-
 @app.post("/posts/{job_id}/regenerate", response_model=CreatePostResponse)
 async def regenerate_post(
     job_id: str,
@@ -192,6 +182,7 @@ async def regenerate_post(
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_session)
 ):
+    logger.info(f"{LOG_PREFIX} regenerate_post: Received regenerate request for job_id={job_id}, type={request.regenerate}, variant={request.variant}")
     """Regenerate specific content for a post variant."""
     logger.info(f"Received regenerate request for job_id={job_id}, type={request.regenerate}, variant={request.variant}")
     try:
@@ -220,7 +211,7 @@ async def regenerate_post(
         # Update job status back to completed after regeneration
         background_tasks.add_task(lambda: update_job_status(session, job_id, "completed"))
         
-        logger.info(f"Regenerating {request.regenerate} for variant {request.variant} in job {job_id}")
+        logger.info(f"{LOG_PREFIX} regenerate_post: Regenerating {request.regenerate} for variant {request.variant} in job {job_id}")
         
         return CreatePostResponse(
             job_id=job_id,
@@ -239,6 +230,7 @@ async def publish_post(
     request: PublishRequest,
     session: Session = Depends(get_session)
 ):
+    logger.info(f"{LOG_PREFIX} publish_post: Received publish request for job_id={job_id}, variant={request.variant}, user_id={request.user_id}")
     """Publish a post variant to LinkedIn."""
     logger.info(f"Received publish request for job_id={job_id}, variant={request.variant}, user_id={request.user_id}")
     try:
@@ -258,14 +250,14 @@ async def publish_post(
         result = publish_to_linkedin(job_id, request.variant, request.user_id)
         
         if result["published"]:
-            logger.info(f"Successfully published variant {request.variant} for job {job_id}")
+            logger.info(f"{LOG_PREFIX} publish_post: Successfully published variant {request.variant} for job {job_id}")
             return PublishResponse(
                 job_id=job_id,
                 published=True,
                 linkedin_post_id=result["linkedin_post_id"]
             )
         else:
-            logger.error(f"Failed to publish variant {request.variant} for job {job_id}: {result.get('error')}")
+            logger.error(f"{LOG_PREFIX} publish_post: Failed to publish variant {request.variant} for job {job_id}: {result.get('error')}")
             return PublishResponse(
                 job_id=job_id,
                 published=False,
@@ -280,6 +272,7 @@ async def publish_post(
 
 @app.get("/health")
 async def health_check():
+    logger.info(f"{LOG_PREFIX} health_check: Health check requested")
     """Health check endpoint."""
     logger.info("Health check requested")
     return {"status": "healthy", "service": "AI Social Post Generator"}
@@ -299,6 +292,7 @@ def update_job_status(session: Session, job_id: str, status: str):
 # Root endpoint
 @app.get("/")
 async def root():
+    logger.info(f"{LOG_PREFIX} root: Root endpoint accessed")
     """Root endpoint with API information."""
     logger.info("Root endpoint accessed")
     return {
@@ -315,6 +309,7 @@ async def root():
 
 @app.get("/test-config")
 async def test_config():
+    logger.info(f"{LOG_PREFIX} test_config: Configuration test endpoint accessed")
     """Test endpoint to verify configuration is loaded correctly."""
     logger.info("Configuration test endpoint accessed")
     return {
