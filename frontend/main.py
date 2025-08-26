@@ -10,8 +10,16 @@ from ui_components import (
     render_results, 
     reset_session
 )
-from config import SESSION_KEYS, POLL_INTERVAL
-MAX_WAIT_TIME = 120  # 2 minutes
+from config import SESSION_KEYS, POLL_INTERVAL, MAX_WAIT_TIME
+
+
+# Set page configuration - this must be the first Streamlit command
+st.set_page_config(
+    page_title="AI Social Post Generator",
+    page_icon="🚀",
+    layout=None,
+    initial_sidebar_state="collapsed"
+)
 
 def initialize_session_state():
     """Initialize session state variables."""

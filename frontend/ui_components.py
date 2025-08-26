@@ -17,13 +17,35 @@ def render_form():
     st.markdown("---")
     
     with st.form("post_form", clear_on_submit=False):
-        # URL input with icon
+        # URL input with icon and expanded width
         st.markdown("### 📰 Article URL")
+        
+        # Apply custom CSS for the URL input field
+        st.markdown("""
+        <style>
+        div[data-testid="stTextInput"] > div > div > input {
+            width: 100% !important;
+            min-width: 500px;
+            max-width: 100%;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: normal;
+            padding: 0.5rem;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        div[data-testid="stTextInput"] {
+            width: 100%;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
         url = st.text_input(
-            "",
+            "URL",
             placeholder="https://example.com/article",
             help="Enter the URL of the article you want to create a post about",
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            key="url_input"
         )
         
         # Opinion selection with icon
@@ -36,7 +58,7 @@ def render_form():
         ]
         
         opinion_choice = st.selectbox(
-            "",
+            "Opinion",
             options=opinion_options,
             help="Choose your stance on the article content",
             label_visibility="collapsed"
@@ -46,7 +68,7 @@ def render_form():
         custom_opinion = ""
         if opinion_choice == "Custom opinion...":
             custom_opinion = st.text_area(
-                "",
+                "Custom Opinion",
                 placeholder="Share your thoughts on this article...",
                 help="Write your personal opinion or perspective",
                 max_chars=500,
@@ -59,7 +81,7 @@ def render_form():
         # Tone selection with icon
         st.markdown("### 🎭 Post Tone")
         tone = st.selectbox(
-            "",
+            "Tone",
             options=["professional", "conversational", "enthusiastic", "thoughtful", "analytical"],
             help="Choose the tone that best fits your audience and message",
             label_visibility="collapsed"
@@ -178,17 +200,20 @@ def render_results(job_result: Dict[str, Any], job_id: str):
     """Render enhanced results with improved card design."""
     st.markdown('<h1 class="main-header">🎉 Your Social Posts Are Ready!</h1>', unsafe_allow_html=True)
     
-    # Display provenance with card styling
+    # Display provenance with card styling only if content exists
     provenance = job_result.get("provenance", {})
-    if provenance:
+    if provenance and (provenance.get("title") or provenance.get("source_url") or provenance.get("excerpt")):
         st.markdown("### 📚 Source Information")
         st.markdown('<div class="post-card">', unsafe_allow_html=True)
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown(f"**Title:** {provenance.get('title', 'No title available')}")
+            if provenance.get("title"):
+                st.markdown(f"**Title:** {provenance.get('title', 'No title available')}")
         with col2:
-            st.markdown(f"**URL:** [{provenance.get('source_url', '#')}]({provenance.get('source_url', '#')})")
-        st.markdown(f"**Excerpt:** {provenance.get('excerpt', 'No excerpt available')}")
+            if provenance.get("source_url"):
+                st.markdown(f"**URL:** [{provenance.get('source_url', '#')}]({provenance.get('source_url', '#')})")
+        if provenance.get("excerpt"):
+            st.markdown(f"**Excerpt:** {provenance.get('excerpt', 'No excerpt available')}")
         st.markdown('</div>', unsafe_allow_html=True)
     
     # Display post variants with enhanced cards
