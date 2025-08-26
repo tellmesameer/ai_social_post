@@ -104,11 +104,12 @@ def format_size(size_bytes: int) -> str:
     
     size_names = ["B", "KB", "MB", "GB"]
     i = 0
-    while size_bytes >= 1024 and i < len(size_names) - 1:
-        size_bytes /= 1024
+    size = float(size_bytes)
+    while size >= 1024 and i < len(size_names) - 1:
+        size /= 1024
         i += 1
     
-    return f"{size_bytes:.1f} {size_names[i]}"
+    return f"{size:.1f} {size_names[i]}"
 
 def main():
     """Main function."""
