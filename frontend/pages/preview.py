@@ -29,9 +29,11 @@ except ImportError as e:
 from api_client import get_api_client
 
 BASE_API_URL = "http://localhost:8000" # Common alternative: "http://127.0.0.1:8000"
+logger = logging.getLogger(__name__)
 
 try:
     BASE_DIR = Path(__file__).resolve().parent.parent.parent
+    logger.info(f"**DEBUG:** Calculated BASE_DIR in frontend: `{BASE_DIR}`")
     if not (BASE_DIR / "tmp").exists():
         raise FileNotFoundError("tmp directory not found relative to assumed project root.")
 except Exception as e:
@@ -46,7 +48,6 @@ RETRY_INTERVAL_SECONDS = 2       # Time between checks
 # --- Logger Setup ---
 # Ensure logger is configured. If frontend/logger.py exists and configures the root logger, this should work.
 # Otherwise, basicConfig might be needed.
-logger = logging.getLogger(__name__)
 # If logging isn't working, uncomment the next line:
 # logging.basicConfig(level=logging.INFO)
 
@@ -159,6 +160,7 @@ def render_preview_card(
 
     # Create columns for layout
     col1, col2 = st.columns([2, 1])
+    logger.info(f"**DEBUG:** Calculated BASE_DIR in frontend: `{BASE_DIR}`")
 
     with col1:
         # Post text (editable)
