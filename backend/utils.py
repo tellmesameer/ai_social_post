@@ -1,11 +1,11 @@
 # backend\utils.py
-import json
 import re
-from typing import Any, Dict, Optional
-from urllib.parse import urlparse
 import time
+import json
 from functools import wraps
+from urllib.parse import urlparse
 from .logger_config import logger
+from typing import Any, Dict, Optional
 
 def is_valid_url(url: str) -> bool:
     """Validate if the given string is a valid URL."""

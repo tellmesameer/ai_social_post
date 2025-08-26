@@ -1,12 +1,17 @@
 # backend\models.py
+
+# Standard library imports
 import json
 from datetime import datetime
-from .config import settings
-from pydantic import BaseModel
 from typing import Optional, Dict, Any
-from .logger_config import logger
 
+# Third-party imports
+from pydantic import BaseModel
 from sqlmodel import SQLModel, Field, create_engine, Session
+
+# Local application imports
+from .config import settings
+from .logger_config import logger
 
 # Pydantic models for API requests/responses
 class CreatePostRequest(BaseModel):

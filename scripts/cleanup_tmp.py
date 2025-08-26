@@ -6,7 +6,8 @@ This script removes temporary job directories older than 24 hours.
 Run this script periodically to manage disk space.
 """
 
-import os
+
+# Standard library imports
 import sys
 import shutil
 from pathlib import Path
@@ -104,7 +105,7 @@ def format_size(size_bytes: int) -> str:
     size_names = ["B", "KB", "MB", "GB"]
     i = 0
     while size_bytes >= 1024 and i < len(size_names) - 1:
-        size_bytes /= 1024.0
+        size_bytes /= 1024
         i += 1
     
     return f"{size_bytes:.1f} {size_names[i]}"

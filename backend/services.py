@@ -1,24 +1,28 @@
 # backend\services.py
+
+# Standard library imports
 import uuid
 import json
+import re
+import ast
+from datetime import datetime
 from typing import Dict, Any, List
-from .logger_config import logger
-from fastapi import BackgroundTasks
+
+# Third-party imports
 from sqlmodel import Session, select
+
+# Local application imports
+from .logger_config import logger, log_call
 from .models import Job, engine, create_db_and_tables
 from .storage import ensure_job_dir, save_json, save_image, get_job_files, read_json
 from .providers import provider
 from .utils import is_valid_url, truncate_text
-from .logger_config import logger, log_call
 from .prompts import (
     create_summary_messages, 
     create_post_variants_messages, 
     create_image_prompt_messages,
     create_moderation_messages
 )
-from datetime import datetime
-import re
-import ast
 
 LOG_PREFIX = "[services.py]"
 

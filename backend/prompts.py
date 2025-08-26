@@ -1,6 +1,10 @@
 # backend\prompts.py
+
+# Third-party imports
 from langchain.prompts import PromptTemplate
 from langchain.schema import HumanMessage, SystemMessage
+
+# Local application imports
 from .logger_config import logger
 
 # System messages for different roles

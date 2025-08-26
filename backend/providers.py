@@ -1,16 +1,20 @@
 # backend\providers.py
+
+# Standard library imports
 import os
 import base64
 import asyncio
 import io as _io
 from typing import Optional
-from .config import settings
-from datetime import datetime
+
+# Third-party imports
 from PIL import Image, ImageDraw
-from .logger_config import logger, log_call
 from langchain_google_genai import ChatGoogleGenerativeAI
-# Use langchain_core.messages consistently for message classes to avoid import mismatches
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, BaseMessage
+from langchain_core.messages import HumanMessage, SystemMessage, BaseMessage
+
+# Local application imports
+from .config import settings
+from .logger_config import logger, log_call
 
 class AI_Response:
     def __init__(self):

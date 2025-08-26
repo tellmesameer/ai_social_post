@@ -1,8 +1,14 @@
 # backend\logger_config.py
-import logging
+
+# Standard library imports
 import sys
 import functools
 import asyncio
+
+# Third-party imports
+import logging
+
+# Typing imports
 from typing import Optional, Callable, Any
 
 def setup_logging(level: str = "INFO", log_format: Optional[str] = None) -> logging.Logger:

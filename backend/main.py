@@ -1,11 +1,16 @@
 # backend\main.py
+
+# Third-party imports
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# Standard library imports
 from contextlib import asynccontextmanager
 
+# Local application imports
 from .api import app as api_router
 from .storage import cleanup_tmp
-from .logger_config import logger, log_call
+from .logger_config import logger
 from .models import create_db_and_tables
 
 @asynccontextmanager

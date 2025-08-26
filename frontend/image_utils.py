@@ -1,9 +1,15 @@
 # frontend/image_utils.py
+
+# Third-party imports
 import streamlit as st
+from PIL import Image, ImageDraw, ImageFont
+
+# Standard library imports
 import time
 from pathlib import Path
 from typing import Optional
-from PIL import Image, ImageDraw, ImageFont
+
+# Local application imports
 from config import TMP_DIR
 
 def get_image_path(job_id: str, variant: str) -> Path:

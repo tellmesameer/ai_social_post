@@ -1,7 +1,12 @@
 # frontend/main.py
+
+# Third-party imports
 import streamlit as st
+
+# Standard library imports
 import time
-from typing import Dict, Any, Optional
+
+# Local application imports
 from api_client import APIClient
 from ui_components import (
     apply_custom_styles, 

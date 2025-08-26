@@ -1,4 +1,6 @@
 # frontend/config.py
+
+# Standard library imports
 from pathlib import Path
 
 # API Configuration

@@ -1,7 +1,13 @@
 # frontend/api_client.py
+
+# Third-party imports
 import requests
 import streamlit as st
+
+# Typing imports
 from typing import Dict, Any, Optional
+
+# Local application imports
 from config import API_BASE_URL
 
 class APIClient:

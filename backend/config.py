@@ -1,6 +1,10 @@
 # backend\config.py
+
+# Standard library imports
 from pathlib import Path
 from typing import Optional
+
+# Third-party imports
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 

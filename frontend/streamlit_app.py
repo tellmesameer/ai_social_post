@@ -1,5 +1,6 @@
 # frontend/streamlit_app.py
-# Import the main function from main.py
+
+# Local application imports
 from main import main
 
 if __name__ == "__main__":

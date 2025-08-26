@@ -1,9 +1,16 @@
 # frontend/ui_components.py
+
+# Third-party imports
 import streamlit as st
 from typing import Dict, Any
+
+# Third-party imports
+import streamlit as st
+
+# Local application imports
 from api_client import APIClient
-from image_utils import image_exists, load_image, create_animated_placeholder
 from config import MAX_WAIT_TIME, CUSTOM_CSS
+from image_utils import image_exists, load_image, create_animated_placeholder
 
 def apply_custom_styles():
     """Apply custom CSS styles to the app."""
