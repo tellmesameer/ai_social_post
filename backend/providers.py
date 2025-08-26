@@ -55,21 +55,15 @@ class AI_Response:
                         return url
                 return None
             image_base64 = _get_image_base64(response)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"image_{timestamp}.png"
             if image_base64 is not None:
-                with open(filename, "wb") as f:
-                    f.write(base64.b64decode(image_base64))
-                print(f"Image saved as {filename}")
                 return {
-                    "image_path": filename,
+                    "image_base64": image_base64,
                     "alt_text": prompt,
                     "status": 200
                 }
             else:
-                print("No image data found to save.")
                 return {
-                    "image_path": None,
+                    "image_base64": None,
                     "alt_text": prompt,
                     "status": 500,
                     "error": "No image data found"
