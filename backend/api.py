@@ -49,7 +49,10 @@ async def cancel_post(job_id: str, session: Session = Depends(get_session)):
 
 # Serve image files by job_id and variant (A/B)
 @app.get("/api/v1/images/{job_id}/{variant}.png") # Ensure the full path is defined in the decorator
-async def serve_image(job_id: str = Path(...), variant: str = Path(...)):
+async def serve_image(
+    job_id: str = FastAPIPath(..., description="Job ID"),
+    variant: str = FastAPIPath(..., description="Variant (A or B)")
+):
     logger.info(f"{LOG_PREFIX} serve_image: called for job_id={job_id}, variant={variant}")
     """Serve generated image files by job_id and variant (A/B)."""
     logger.info(f"serve_image called for job_id={job_id}, variant={variant}")
