@@ -1,298 +1,204 @@
-# 🚀 AI Social Post Generator
 
-Transform any article into engaging LinkedIn posts with AI-generated images using LangChain, Vertex AI, and OpenAI.
+# AI Social Post Generator
 
-## ✨ Features
+An intelligent system that transforms any article into engaging LinkedIn posts with AI-generated images. This application uses advanced language models to create compelling social media content complete with custom visuals.
 
-- **🔗 URL Scraping** - Automatically extract content from any article
-- **🤖 AI Summarization** - Generate concise summaries using LangChain
-- **📝 Post Generation** - Create A/B testing variants with professional tone
-- **🎨 Image Generation** - AI-powered visuals using Vertex Imagen or DALL-E
-- **✅ Content Moderation** - Safety checks before publishing
-- **📤 LinkedIn Ready** - Optimized posts for professional networking
-- **🔄 A/B Testing** - Compare two post variants for better engagement
-- **⚡ Async Job Pipeline** - Fully async backend for fast, scalable processing
-- **⏳ Auto-Refresh & Polling** - Frontend auto-refreshes until images are ready
-- **🛑 Cancel Jobs** - Cancel in-progress jobs from the UI
+## Features
 
-## 🏗️ Architecture
+- **Article Scraping**: Extract content from any URL
+- **AI-Powered Summarization**: Generate concise summaries and key points
+- **Post Variants**: Create two distinct LinkedIn post options (A/B variants)
+- **Image Generation**: Generate custom images for each post variant
+- **Content Moderation**: Ensure all content meets professional standards
+- **LinkedIn Integration**: Publish posts directly to LinkedIn
+- **Regeneration Options**: Regenerate text, images, or both as needed
+- **Responsive UI**: Clean, intuitive interface built with Streamlit
+
+## Prerequisites
+
+- Python 3.9+
+- Google API key (for Vertex AI) or OpenAI API key
+- LinkedIn Developer credentials (for publishing)
+
+## Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/ai-social-post-generator.git
+   cd ai-social-post-generator
+   ```
+
+2. **Create a virtual environment**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+3. **Install dependencies**
+   ```bash
+   pip install -r backend/requirements.txt
+   pip install -r frontend/requirements.txt
+   ```
+
+4. **Set up environment variables**
+   Create a `.env` file in the project root:
+   ```env
+   # Google Vertex AI
+   GOOGLE_API_KEY=your_google_api_key
+   GOOGLE_APPLICATION_CREDENTIALS=path/to/credentials.json
+   VERTEX_PROJECT=your_project_id
+   VERTEX_LOCATION=us-central1
+
+   # OpenAI (fallback)
+   OPENAI_API_KEY=your_openai_api_key
+
+   # LinkedIn
+   LINKEDIN_CLIENT_ID=your_linkedin_client_id
+   LINKEDIN_CLIENT_SECRET=your_linkedin_client_secret
+   ```
+
+## Usage
+
+### Quick Start
+
+1. **Start the application**
+   ```bash
+   python run.py
+   ```
+
+2. **Open your browser**
+   - Frontend: http://localhost:8501
+   - Backend API: http://localhost:8000
+   - API Documentation: http://localhost:8000/docs
+
+### Using the Application
+
+1. **Create a new post**
+   - Enter the URL of an article
+   - Select your opinion (agree, disagree, neutral, or custom)
+   - Choose the tone (professional, conversational, etc.)
+   - Configure image generation options
+
+2. **Review generated content**
+   - View two post variants (A and B)
+   - Check generated images for each variant
+   - Edit text as needed
+
+3. **Publish or regenerate**
+   - Publish directly to LinkedIn
+   - Regenerate text, images, or both if needed
+
+### API Usage
+
+The backend provides a RESTful API with the following endpoints:
+
+- `POST /api/v1/posts` - Create a new post generation job
+- `GET /api/v1/posts/{job_id}` - Get job status and results
+- `POST /api/v1/posts/{job_id}/regenerate` - Regenerate content
+- `POST /api/v1/posts/{job_id}/publish` - Publish to LinkedIn
+- `GET /api/v1/health` - Health check endpoint
+
+For detailed API documentation, visit http://localhost:8000/docs when the backend is running.
+
+## Project Structure
 
 ```
 ai-social-post-generator/
 ├── backend/                 # FastAPI backend
-│   ├── main.py            # FastAPI app entry point
-│   ├── api.py             # REST API endpoints (now includes /cancel)
-│   ├── services.py        # Async job pipeline, status, and cancellation
-│   ├── providers.py       # AI provider abstraction (Vertex/OpenAI)
-│   ├── prompts.py         # LangChain prompt templates
-│   ├── models.py          # Database models (SQLModel)
-│   ├── storage.py         # File management & cleanup
-│   └── config.py          # Configuration & settings
+│   ├── api.py              # API endpoints
+│   ├── config.py           # Configuration settings
+│   ├── logger_config.py    # Logging configuration
+│   ├── main.py             # FastAPI application
+│   ├── models.py           # Database models
+│   ├── prompts.py          # LangChain prompts
+│   ├── providers.py        # AI provider adapters
+│   ├── requirements.txt    # Python dependencies
+│   ├── services.py         # Business logic
+│   ├── storage.py          # File storage utilities
+│   └── utils.py            # Utility functions
 ├── frontend/               # Streamlit frontend
-│   ├── streamlit_app.py   # Main app with navigation
-│   ├── pages/             # Page components (auto-refresh, preview, cancel)
-│   └── components/        # Reusable UI components (image preview, cards)
-├── scripts/                # Utility scripts
-└── tmp/                    # Temporary job files
+│   ├── api_client.py       # API client
+│   ├── config.py           # Frontend configuration
+│   ├── image_utils.py      # Image handling utilities
+│   ├── main.py             # Main application
+│   ├── requirements.txt    # Python dependencies
+│   ├── streamlit_app.py    # Streamlit entry point
+│   └── ui_components.py    # UI components
+├── scripts/                # Helper scripts
+│   ├── cleanup_tmp.py      # Clean temporary files
+│   └── start_local.sh      # Local development startup
+├── tmp/                    # Temporary storage (created at runtime)
+├── run.py                  # Application runner
+└── README.md               # This file
 ```
 
-## 🚀 Quick Start
+## Configuration
 
-### Prerequisites
+### Backend Configuration
 
-- Python 3.8+
-- Virtual environment
-- API keys (optional for development)
+The backend uses environment variables for configuration. Key settings include:
 
-### 1. Setup Environment
+- `GOOGLE_API_KEY`: Google API key for Vertex AI
+- `OPENAI_API_KEY`: OpenAI API key (fallback)
+- `LINKEDIN_CLIENT_ID`: LinkedIn application client ID
+- `LINKEDIN_CLIENT_SECRET`: LinkedIn application client secret
+- `DATABASE_URL`: Database connection string (default: SQLite)
 
+### Frontend Configuration
+
+The frontend configuration is in `frontend/config.py`:
+
+- `API_BASE_URL`: Backend API URL (default: http://localhost:8000)
+- `MAX_WAIT_TIME`: Maximum time to wait for job completion (default: 120 seconds)
+- `POLL_INTERVAL`: Status check interval (default: 2 seconds)
+
+## Development
+
+### Running in Development Mode
+
+1. **Start the backend**
+   ```bash
+   cd backend
+   python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
+   ```
+
+2. **Start the frontend**
+   ```bash
+   cd frontend
+   streamlit run streamlit_app.py --server.port 8501
+   ```
+
+### Testing
+
+To run tests (if implemented):
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd ai-social-post-generator
-
-# Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r backend/requirements.txt
-pip install -r frontend/requirements.txt
+pytest
 ```
 
-### 2. Configuration
+### Code Style
 
-Create a `.env` file in the root directory:
+This project follows PEP 8 style guidelines. We use tools like `black` and `flake8` for code formatting and linting.
 
-```env
-# AI Providers
-GOOGLE_APPLICATION_CREDENTIALS=/path/to/gcp-creds.json
-VERTEX_PROJECT=your-project-id
-VERTEX_LOCATION=us-central1
-OPENAI_API_KEY=sk-your-openai-key
-
-# LinkedIn (optional)
-LINKEDIN_CLIENT_ID=your-linkedin-client-id
-LINKEDIN_CLIENT_SECRET=your-linkedin-client-secret
-
-# App Settings
-API_BASE=http://localhost:8000
-PRIMARY_PROVIDER=vertex  # or openai
-ENABLE_FALLBACK=true
-```
-
-### 3. Start the Application
-
-#### Option A: Using the startup script (recommended)
-
-```bash
-# Make script executable (Unix/Mac)
-chmod +x scripts/start_local.sh
-
-# Start both backend and frontend
-./scripts/start_local.sh
-```
-
-#### Option B: Manual startup
-
-```bash
-# Terminal 1: Start backend
-cd backend
-uvicorn main:app --reload --port 8000
-
-# Terminal 2: Start frontend
-cd frontend
-streamlit run streamlit_app.py --server.port 8501
-```
-
-### 4. Access the Application
-
-- **Frontend**: http://localhost:8501
-- **Backend API**: http://localhost:8000
-- **API Documentation**: http://localhost:8000/docs
-
-## 🔧 Development
-
-### Project Structure
-
-- **Backend**: FastAPI with SQLModel, LangChain integration, async job pipeline, cancel endpoint
-- **Frontend**: Streamlit with modular components, auto-refresh, cancel, and image polling
-- **Database**: SQLite (development) / PostgreSQL (production)
-- **AI Providers**: Vertex AI (primary), OpenAI (fallback)
-
-### Key Components
-
-#### Async Job Pipeline & Cancellation
-
-- All backend job steps (scraping, summary, variants, images, moderation) are async
-- Job status: `queued`, `in_progress`, `completed`, `failed`, `cancelled`
-- Cancel endpoint: `POST /api/v1/posts/{job_id}/cancel` (UI button in preview page)
-- Pipeline checks for cancellation at every step
-
-#### Frontend Auto-Refresh & Image Polling
-
-- Home page auto-polls job status and enables preview only when images are ready
-- Preview page disables actions until images are generated
-- Cancel button available during processing
-
-#### LangChain Integration
-
-The application uses LangChain for:
-- **Prompt Management**: Structured prompts for different tasks
-- **Provider Abstraction**: Seamless switching between AI providers
-- **Content Generation**: Consistent, high-quality output
-
-#### Job Pipeline
-
-1. **URL Scraping** → Extract article content
-2. **AI Summarization** → Generate key points
-3. **Post Generation** → Create A/B variants
-4. **Image Generation** → AI-powered visuals
-5. **Content Moderation** → Safety checks
-6. **Result Storage** → Save to temporary directory
-
-### Adding New Features
-
-#### Custom AI Providers
-
-Extend `backend/providers.py`:
-
-```python
-class CustomProvider(BaseProvider):
-    def generate_text(self, prompt: str, **kwargs) -> str:
-        # Your implementation
-        pass
-    
-    def generate_image(self, prompt: str, **kwargs) -> bytes:
-        # Your implementation
-        pass
-```
-
-#### New Prompt Templates
-
-Add to `backend/prompts.py`:
-
-```python
-CUSTOM_PROMPT = PromptTemplate(
-    input_variables=["input_var"],
-    template="Your prompt template here: {input_var}"
-)
-```
-
-## 🧪 Testing
-
-### Run Tests
-
-```bash
-# Backend tests
-cd backend
-python -m pytest tests/
-
-# Frontend tests (if implemented)
-cd frontend
-python -m pytest tests/
-```
-
-### Test API Endpoints
-
-```bash
-# Health check
-curl http://localhost:8000/health
-
-# Create post job
-curl -X POST "http://localhost:8000/api/v1/posts" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "https://example.com/article",
-    "opinion": "Agree — solid arguments",
-    "tone": "professional",
-    "image_options": {
-      "style": "photographic",
-      "aspect_ratio": "16:9"
-    }
-  }'
-
-# Cancel a job
-curl -X POST "http://localhost:8000/api/v1/posts/<job_id>/cancel"
-```
-
-## 📊 Monitoring & Maintenance
-
-### Cleanup Temporary Files
-
-```bash
-# Clean files older than 24 hours
-python scripts/cleanup_tmp.py
-
-# Dry run to see what would be cleaned
-python scripts/cleanup_tmp.py --dry-run
-
-# Custom age threshold
-python scripts/cleanup_tmp.py --max-age 48
-```
-
-### Logs
-
-- **Backend logs**: `logs/backend.log`
-- **Frontend logs**: `logs/frontend.log`
-
-### Health Checks
-
-- Backend: `GET /health`
-- Frontend: Built-in health check in sidebar
-
-## 🚀 Deployment
-
-### Production Considerations
-
-1. **Environment Variables**: Use proper secret management
-2. **Database**: Switch to PostgreSQL for production
-3. **File Storage**: Use cloud storage (S3, GCS) instead of local tmp
-4. **Monitoring**: Add logging, metrics, and alerting
-5. **Security**: Implement authentication and rate limiting
-
-### Docker Deployment
-
-```dockerfile
-# Example Dockerfile
-FROM python:3.9-slim
-
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-COPY . .
-EXPOSE 8000
-
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
-```
-
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## 📝 License
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 🆘 Support
+## Acknowledgments
 
-- **Issues**: Create a GitHub issue
-- **Documentation**: Check the API docs at `/docs`
-- **Community**: Join our discussions
+- [FastAPI](https://fastapi.tiangolo.com/) for the backend framework
+- [Streamlit](https://streamlit.io/) for the frontend framework
+- [LangChain](https://langchain.com/) for AI orchestration
+- [Google Vertex AI](https://cloud.google.com/vertex-ai) and [OpenAI](https://openai.com/) for AI models
+- [LinkedIn API](https://learn.microsoft.com/en-us/linkedin/) for social media integration
 
-## 🙏 Acknowledgments
+## Support
 
-- **LangChain** for AI orchestration
-- **Vertex AI** for Gemini and Imagen
-- **OpenAI** for GPT and DALL-E
-- **FastAPI** for the robust backend
-- **Streamlit** for the beautiful frontend
-
----
-
-**Built with ❤️ using modern AI technologies**
+If you encounter any issues or have questions, please open an issue on GitHub.
